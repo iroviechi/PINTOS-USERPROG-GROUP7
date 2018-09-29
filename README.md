@@ -1,33 +1,8 @@
 
 
- 	
-
-                         +-----------------+
-                         |    COE127L C1   |
-                         |  USER PROGRAMS  |
-                         | DESIGN DOCUMENT |
-                         +-----------------+
-
----- GROUP 07 ----
-
-ISHIKAWA, CHIERI <cishikawa@mymail.mapua.edu.ph>
-JAVIER, RUPPERT IAN <rirjavier@mymail.mapua.edu.ph>
-YANG, RETH JERON <rjyang@mymail.mapua.edu.ph>
-
----- PRELIMINARIES ----
-
->> This Design Document is still on progress.
-
-(The deadline of this design document is on the 10th week.)
-
->> One of the materials used are the source codes on the 
->> PintOS of Stanford University,
->> http://www.stanford.edu/class/cs140/projects/pintos/pintos.tar.gz
-
-
 
  		     +--------------------------+
-       	 |		   COE127L / C1       |
+       	 	     |	     COE127L / C1       |
 		     | PROJECT 2: USER PROGRAMS	|
 		     | 	   DESIGN DOCUMENT     	|
 		     +--------------------------+
