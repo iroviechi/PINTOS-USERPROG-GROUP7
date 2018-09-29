@@ -27,18 +27,13 @@ YANG, RETH JERON <rjyang@mymail.mapua.edu.ph>
 			   ARGUMENT PASSING
 			   ================
 
----- DATA STRUCTURES ----
+----- DATA STRUCTURES ----
 
->> A1: struct thread *t is declared for the purpose of argument passing
->> 'char *save' is declared to .
->> 'char *fn' is declared for the purpose of .
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
 
-	char *save;
-	char *fn;
-
-	struct thread *t;
-
-	tid = TID_ERROR;
+None
 
 ---- ALGORITHMS ----
 
@@ -46,13 +41,61 @@ YANG, RETH JERON <rjyang@mymail.mapua.edu.ph>
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+How to implement argument parsing?
+----------------------------------
+The most important part was to setup the stack. We did it inside setup_stack ()
+after page is installed, when the stack has been initialized.
+
+Process_execute provides file_name, including command and arguments
+string. First, we separated the first token and the rest, which are command and
+arguments. We use command as the new thread's name, and pass down the arguments
+string to start_process(), load() and setup_stack(). We think it’s implementable
+since we can always get the command name from thread->name when needed, like
+when load the ELF executable. 
+
+When setting up the stack, we memcpy the argument string and then the command
+name which is actually the thread name in our case. Then add alignment, scan the
+string backward to get each token and push its address into the page underneath
+the alignment to generate argv[], finally argv, argc and return address.
+
+Way of arranging for the elements of argv[] to be in the right order.
+--------------------------------------------------------------------
+We scan through the argument string backwards, so that the first token we get is
+the last argument, the last token we get is the first argument. We can just keep
+decreasing esp pointer to setup the argv[] elements. 
+
+How to avoid overflowing the stack page?
+----------------------------------------
+The thing is we decided not to check the esp pointer until it fails. Our
+implementation didn’t pre-count how much space do we need, just go through
+everything, make the change, like add another argv element, when necessary. But
+this leaves us two way to deal with overflowing, one is checking esp’s validity
+every time before use it, the other one is letting it fails, and we handle it in
+the page fault exception, which is exit(-1) the running thread whenever the
+address is invalid. We chose the latter approach since the first approach seems
+have too much burden and it make sense to terminate the process if it provides
+too much arguments.
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
+The only difference between strtok_r() and strtok() is that the save_ptr
+(placeholder) in strtok_r() is provided by the caller. In pintos, the kernel
+separates commands into command line (executable name) and arguments. So we need
+to put the address of the arguments somewhere we can reach later.
+
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+1) Shortening the time inside kernel
+2) Robust checking. Checking whether the executable is there before passing it
+to kernel to avoid kernel fail. Checking whether the arguments are over the
+limit. 
+3) Once it can separate the commands, it can do advanced pre-processing, acting
+more like an interpreter not only an interface. Like passing more than 1 set
+of command line at a time, i.e. cd; mkdir tmp; touch test; and pipe.
 
 			     SYSTEM CALLS
 			     ============
