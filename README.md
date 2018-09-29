@@ -2,7 +2,7 @@
 
 
  		     +--------------------------+
-       	 	     |	     COE127L / C1       |
+       	     |	     COE127L / C1       |
 		     | PROJECT 2: USER PROGRAMS	|
 		     | 	   DESIGN DOCUMENT     	|
 		     +--------------------------+
