@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <kernel/list.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
@@ -17,16 +18,15 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
+/* Waiting list of timer_sleep */
+struct list sleeping_list;
+
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
-
-/* MRM List of all sleeping threads. These need
-   to be checked if they need to wake up. */
-static struct list sleeping_threads;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
@@ -41,9 +41,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-
-  ASSERT (intr_get_level () == INTR_OFF);
-  list_init (&sleeping_threads);
+  list_init (&sleeping_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -96,18 +94,26 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  struct thread *cur_thread;
+  enum intr_level old_level;
 
   ASSERT (intr_get_level () == INTR_ON);
-  
-  intr_disable();
-  list_push_front (&sleeping_threads, &thread_current ()->sleepElem);
-  intr_enable();
-  //MRM missed the add to list
-  thread_current ()->endTicks = start + ticks;
-  sema_down( &thread_current ()->sleep_Sem);
-  //while (timer_elapsed (start) < ticks) 
-    //thread_yield ();
+
+  if (ticks <= 0)
+    return;
+
+  old_level = intr_disable ();
+
+  /* Get current thread and set wakeup ticks. */
+  cur_thread = thread_current ();
+  cur_thread->wakeup_ticks = timer_ticks () + ticks;
+
+  /* Insert current thread to ordered sleeping list */
+  list_insert_ordered (&sleeping_list, &cur_thread->elem,
+                       thread_wakeup_ticks_less, NULL);
+  thread_block ();
+
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -184,25 +190,38 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  struct list_elem *pe;
+  struct thread *pt;
+  bool preempt = false;
+
   ticks++;
-  //MRMRMRMMRMR
-  struct list_elem *e;
+  thread_tick ();
 
-  ASSERT (intr_get_level () == INTR_OFF);
-
-  for (e = list_begin (&sleeping_threads); e != list_end (&sleeping_threads);
-       e = list_next (e))
+  /* Actions for 4.4BSD scheduler. */
+  if (thread_mlfqs)
     {
-      struct thread *t = list_entry (e, struct thread, sleepElem);
-      if(ticks >= t->endTicks)
-      {
-        //MRM wake up time (list removal, sema wakeup)
-        list_remove (e);
-        sema_up(&t->sleep_Sem);
-      }
+      thread_mlfqs_incr_recent_cpu ();
+      if (ticks % TIMER_FREQ == 0)
+        thread_mlfqs_refresh ();
+      else if (ticks % 4 == 0)
+        thread_mlfqs_update_priority (thread_current ());
     }
 
-  //thread_tick ();
+  /* Check and wake up sleeping threads. */
+  while (!list_empty(&sleeping_list))
+    {
+      pe = list_front (&sleeping_list);
+      pt = list_entry (pe, struct thread, elem);
+      if (pt->wakeup_ticks > ticks)
+        {
+          break;
+        }
+      list_remove (pe);
+      thread_unblock (pt);
+      preempt = true;
+    }
+  if (preempt)
+    intr_yield_on_return ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
